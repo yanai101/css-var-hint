@@ -1,5 +1,5 @@
 {
-  "name": "css-var-hint",
+	"name": "css-var-hint",
 	"displayName": "css var hint",
 	"description": "css var hint",
 	"version": "0.0.1",
@@ -42,5 +42,8 @@
 		"mocha": "^8.1.3",
 		"typescript": "^4.0.2",
 		"vscode-test": "^1.4.0"
+	},
+	"dependencies": {
+		"css-tree": "^1.0.0-alpha.39"
 	}
 }
