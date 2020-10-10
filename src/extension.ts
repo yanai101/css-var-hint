@@ -23,20 +23,11 @@ let cssVars = []
 
 async function getAllVariable(urlPath){
 	// console.log(workspace.rootPath)
+	
+	let reader:any = null;
+	let done = false;
 	const pathDir = await path.join(urlPath)
 	const currentDirectory = fs.readdirSync(pathDir, { withFileTypes: true });
-	// currentDirectory.forEach(item => {
-	// 	if(item.isDirectory() && !directoriesToIgnore.includes(item.name)){
-	// 		getAllVariable(path.join(pathDir, item.name));
-						
-	// 	}
-	// 	if(item.name.includes('css') || item.name.includes('scss')){
-	// 		const reader = fs.createReadStream(path.join(pathDir, item.name)); 
-	// 		reader.on('data', function (chunk) { 
-	// 			getCssVarFromChunk(chunk.toString(),context); 
-	// 		}); 
-	// 	}
-	// });
 		while (currentDirectory.length > 0) {
 				const item = currentDirectory.pop();
 				if(item.isDirectory() && !directoriesToIgnore.includes(item.name)){
@@ -44,15 +35,22 @@ async function getAllVariable(urlPath){
 								
 				}
 				if(item.name.includes('css') || item.name.includes('scss')){
-					const reader = fs.createReadStream(path.join(pathDir, item.name)); 
+					reader = fs.createReadStream(path.join(pathDir, item.name)); 
 					reader.on('data', async function (chunk) { 
 						await getCssVarFromChunk(chunk.toString()); 
-						cb();
-					}); 
+					});
 				}
-			
 		}
+
 		
+		return new Promise((resolve, reject) =>{
+			reader.on('end', () => { 
+				if(currentDirectory.length === 0){
+					resolve(cssVars)
+				}
+			}); 
+		})
+ 
 	
 }
 
@@ -81,20 +79,43 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.window.showInformationMessage('Hello World from css var hint!');
 	});
 	
-	getAllVariable(vscode.workspace.rootPath);
 	
-	console.log(cssVars)
+	
+	// console.log(cssVars)
 
-	const complitions = cssVars.map(item=>{
-		new vscode.CompletionItem(`${item.var}`)
-	})
+	// const complitions = cssVars.map(item=>{
+	// 	new vscode.CompletionItem(`${item.var}`)
+	// })
 	
-	
-	const auto = vscode.languages.registerCompletionItemProvider(['css','scss'], {
+	const run = async() => {
+		const data: any = await getAllVariable(vscode.workspace.rootPath);
+
+		console.log('DATA',data)
+		const cssVarsItems: vscode.CompletionItem[] = data.map((item:{cssVar: string}) => new vscode.CompletionItem(item.cssVar))
+		console.log(cssVarsItems)
+
+		const auto = vscode.languages.registerCompletionItemProvider(['css','scss'], {
 		provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
-			return [complitions];
+			return cssVarsItems
 		}
-	})
+		})
+	
+		context.subscriptions.push(auto);
+
+	}
+
+	run();
+	
+	// const auto = vscode.languages.registerCompletionItemProvider(['css','scss'], {
+	// 	provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
+	// 		const cssVarsItems: vscode.CompletionItem[] = [];
+	// 		getAllVariable(vscode.workspace.rootPath).then(data=>{
+	// 			console.log('vars', cssVars)
+	// 		});
+			
+	// 		//return [complitions];	
+	// 	}
+	// })
 
 	context.subscriptions.push(auto);
 

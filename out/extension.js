@@ -28,34 +28,31 @@ let cssVars = [];
 function getAllVariable(urlPath) {
     return __awaiter(this, void 0, void 0, function* () {
         // console.log(workspace.rootPath)
+        let reader = null;
+        let done = false;
         const pathDir = yield path.join(urlPath);
         const currentDirectory = fs.readdirSync(pathDir, { withFileTypes: true });
-        // currentDirectory.forEach(item => {
-        // 	if(item.isDirectory() && !directoriesToIgnore.includes(item.name)){
-        // 		getAllVariable(path.join(pathDir, item.name));
-        // 	}
-        // 	if(item.name.includes('css') || item.name.includes('scss')){
-        // 		const reader = fs.createReadStream(path.join(pathDir, item.name)); 
-        // 		reader.on('data', function (chunk) { 
-        // 			getCssVarFromChunk(chunk.toString(),context); 
-        // 		}); 
-        // 	}
-        // });
         while (currentDirectory.length > 0) {
             const item = currentDirectory.pop();
             if (item.isDirectory() && !directoriesToIgnore.includes(item.name)) {
                 getAllVariable(path.join(pathDir, item.name));
             }
             if (item.name.includes('css') || item.name.includes('scss')) {
-                const reader = fs.createReadStream(path.join(pathDir, item.name));
+                reader = fs.createReadStream(path.join(pathDir, item.name));
                 reader.on('data', function (chunk) {
                     return __awaiter(this, void 0, void 0, function* () {
                         yield getCssVarFromChunk(chunk.toString());
-                        cb();
                     });
                 });
             }
         }
+        return new Promise((resolve, reject) => {
+            reader.on('end', () => {
+                if (currentDirectory.length === 0) {
+                    resolve(cssVars);
+                }
+            });
+        });
     });
 }
 function getCssVarFromChunk(chunk) {
@@ -77,16 +74,32 @@ function activate(context) {
     let disposable = vscode.commands.registerCommand('css-var-hint.helloWorld', () => {
         vscode.window.showInformationMessage('Hello World from css var hint!');
     });
-    getAllVariable(vscode.workspace.rootPath);
-    console.log(cssVars);
-    const complitions = cssVars.map(item => {
-        new vscode.CompletionItem(`${item.var}`);
+    // console.log(cssVars)
+    // const complitions = cssVars.map(item=>{
+    // 	new vscode.CompletionItem(`${item.var}`)
+    // })
+    const run = () => __awaiter(this, void 0, void 0, function* () {
+        const data = yield getAllVariable(vscode.workspace.rootPath);
+        console.log('DATA', data);
+        const cssVarsItems = data.map((item) => new vscode.CompletionItem(item.cssVar));
+        console.log(cssVarsItems);
+        const auto = vscode.languages.registerCompletionItemProvider(['css', 'scss'], {
+            provideCompletionItems(document, position, token) {
+                return cssVarsItems;
+            }
+        });
+        context.subscriptions.push(auto);
     });
-    const auto = vscode.languages.registerCompletionItemProvider(['css', 'scss'], {
-        provideCompletionItems(document, position, token) {
-            return [complitions];
-        }
-    });
+    run();
+    // const auto = vscode.languages.registerCompletionItemProvider(['css','scss'], {
+    // 	provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
+    // 		const cssVarsItems: vscode.CompletionItem[] = [];
+    // 		getAllVariable(vscode.workspace.rootPath).then(data=>{
+    // 			console.log('vars', cssVars)
+    // 		});
+    // 		//return [complitions];	
+    // 	}
+    // })
     context.subscriptions.push(auto);
     // const auto = vscode.languages.registerCompletionItemProvider(['css','scss'], {
     // 	provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
