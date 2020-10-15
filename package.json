@@ -3,6 +3,7 @@
 	"displayName": "css var hint",
 	"description": "css var hint",
 	"version": "0.0.1",
+	"publisher": "yanai101",
 	"engines": {
 		"vscode": "^1.49.0"
 	},
