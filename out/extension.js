@@ -27,7 +27,6 @@ const directoriesToIgnore = [
 let cssVars = [];
 function getAllVariable(urlPath) {
     return __awaiter(this, void 0, void 0, function* () {
-        // console.log(workspace.rootPath)
         let reader = null;
         let done = false;
         const pathDir = yield path.join(urlPath);
@@ -56,9 +55,6 @@ function getAllVariable(urlPath) {
     });
 }
 function getCssVarFromChunk(chunk) {
-    // TODO check AST for CSS variables : https://github.com/csstree/csstree
-    // const ast = csstree.parse(chunk);
-    // console.log(ast);
     const lines = chunk.split(/\r?\n/);
     lines.forEach(line => {
         const lineTrim = line.trim();
@@ -70,19 +66,9 @@ function getCssVarFromChunk(chunk) {
     return;
 }
 function activate(context) {
-    console.log('Congratulations, your extension "css-var-hint" is now active!');
-    let disposable = vscode.commands.registerCommand('css-var-hint.helloWorld', () => {
-        vscode.window.showInformationMessage('Hello World from css var hint!');
-    });
-    // console.log(cssVars)
-    // const complitions = cssVars.map(item=>{
-    // 	new vscode.CompletionItem(`${item.var}`)
-    // })
     const run = () => __awaiter(this, void 0, void 0, function* () {
         const data = yield getAllVariable(vscode.workspace.rootPath);
-        console.log('DATA', data);
         const cssVarsItems = data.map((item) => new vscode.CompletionItem(item.cssVar));
-        console.log(cssVarsItems);
         const auto = vscode.languages.registerCompletionItemProvider(['css', 'scss'], {
             provideCompletionItems(document, position, token) {
                 return cssVarsItems;
@@ -91,30 +77,7 @@ function activate(context) {
         context.subscriptions.push(auto);
     });
     run();
-    // const auto = vscode.languages.registerCompletionItemProvider(['css','scss'], {
-    // 	provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
-    // 		const cssVarsItems: vscode.CompletionItem[] = [];
-    // 		getAllVariable(vscode.workspace.rootPath).then(data=>{
-    // 			console.log('vars', cssVars)
-    // 		});
-    // 		//return [complitions];	
-    // 	}
-    // })
     context.subscriptions.push(auto);
-    // const auto = vscode.languages.registerCompletionItemProvider(['css','scss'], {
-    // 	provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
-    // 		return [new vscode.CompletionItem("Hello")];
-    // 	}
-    // })
-    // const auto2 = vscode.languages.registerCompletionItemProvider('scss', {
-    // 	provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
-    // 		return [new vscode.CompletionItem("Hello"),new vscode.("Helloaaa")];
-    // 	}
-    // })
-    // https://css-tricks.com/what-i-learned-by-building-my-own-vs-code-extension/
-    //context.subscriptions.push(disposable);
-    // context.subscriptions.push(auto);
-    // context.subscriptions.push(auto2);
 }
 exports.activate = activate;
 // this method is called when your extension is deactivated
