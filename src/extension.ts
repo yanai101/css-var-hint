@@ -18,22 +18,22 @@ const directoriesToIgnore = [
 	"server"
   ];
 
-let cssVars = []
+let cssVars: Array<{cssVar: string, val: string}> = []
 
-async function getAllVariable(urlPath){	
+async function getAllVariable(urlPath:string): Promise<Array<{cssVar: string, val: string}>>{	
 	let reader:any = null;
 	let done = false;
 	const pathDir = await path.join(urlPath)
 	const currentDirectory = fs.readdirSync(pathDir, { withFileTypes: true });
 		while (currentDirectory.length > 0) {
-				const item = currentDirectory.pop();
+				const item:any = currentDirectory.pop();
 				if(item.isDirectory() && !directoriesToIgnore.includes(item.name)){
 					getAllVariable(path.join(pathDir, item.name));
 								
 				}
 				if(item.name.includes('css') || item.name.includes('scss')){
 					reader = fs.createReadStream(path.join(pathDir, item.name)); 
-					reader.on('data', async function (chunk) { 
+					reader.on('data', async function (chunk:string) { 
 						await getCssVarFromChunk(chunk.toString()); 
 					});
 				}
@@ -41,7 +41,7 @@ async function getAllVariable(urlPath){
 
 		
 		return new Promise((resolve, reject) =>{
-			reader.on('end', () => { 
+			reader && reader.on('end', () => { 
 				if(currentDirectory.length === 0){
 					resolve(cssVars)
 				}
@@ -68,7 +68,7 @@ function getCssVarFromChunk(chunk:string){
 export function activate(context: vscode.ExtensionContext) {
 	
 	const run = async() => {
-		const data: any = await getAllVariable(vscode.workspace.rootPath);
+		const data: any = await getAllVariable(vscode.workspace.rootPath as string);
 
 		const cssVarsItems: vscode.CompletionItem[] = data.map((item:{cssVar: string}) => new vscode.CompletionItem(item.cssVar))
 		const auto = vscode.languages.registerCompletionItemProvider(['css','scss'], {
@@ -82,8 +82,6 @@ export function activate(context: vscode.ExtensionContext) {
 	}
 
 	run();
-	
-	context.subscriptions.push(auto);
 }
 
 
