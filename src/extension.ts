@@ -38,7 +38,6 @@ function updateCssVarFromChunk(chunk: string) {
         const kind = val.trim().startsWith("#") || val.trim().startsWith("rgba") || val.trim().startsWith("rgb") ? 15 : undefined;
         const hint = new vscode.CompletionItem(cssVar, kind);
         hint.detail = val;
-
         cssVarsItems.push(hint);
         cssVars.set(cssVar, val);
       }
