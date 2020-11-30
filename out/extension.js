@@ -15,68 +15,57 @@ exports.deactivate = exports.activate = void 0;
 const vscode = require("vscode");
 const fs = require("fs");
 const path = require("path");
-const directoriesToIgnore = [
-    "bower_components",
-    "node_modules",
-    "www",
-    "platforms",
-    "dist",
-    ".git",
-    ".idea",
-    "build",
-    "server"
-];
-let cssVars = [];
+const directoriesToIgnore = ["bower_components", "node_modules", "www", "platforms", "dist", ".git", ".idea", "build", "server"];
+const cssVars = new Map();
+let contextCopy;
 function getAllVariable(urlPath) {
     return __awaiter(this, void 0, void 0, function* () {
         let reader = null;
-        let done = false;
-        const pathDir = yield path.join(urlPath);
+        const pathDir = path.join(urlPath);
         const currentDirectory = fs.readdirSync(pathDir, { withFileTypes: true });
-        while (currentDirectory.length > 0) {
-            const item = currentDirectory.pop();
+        currentDirectory.forEach((item) => __awaiter(this, void 0, void 0, function* () {
             if (item.isDirectory() && !directoriesToIgnore.includes(item.name)) {
                 getAllVariable(path.join(pathDir, item.name));
             }
-            if (item.name.includes('css') || item.name.includes('scss')) {
+            if (item.name.includes("css") || item.name.includes("scss")) {
                 reader = fs.createReadStream(path.join(pathDir, item.name));
-                reader.on('data', function (chunk) {
-                    return __awaiter(this, void 0, void 0, function* () {
-                        yield getCssVarFromChunk(chunk.toString());
-                    });
+                reader.on("data", (chunk) => {
+                    updateCssVarFromChunk(chunk.toString());
                 });
             }
-        }
-        return new Promise((resolve, reject) => {
-            reader && reader.on('end', () => {
-                if (currentDirectory.length === 0) {
-                    resolve(cssVars);
-                }
-            });
-        });
+        }));
     });
 }
-function getCssVarFromChunk(chunk) {
+function updateCssVarFromChunk(chunk) {
+    const cssVarsItems = [];
     const lines = chunk.split(/\r?\n/);
-    lines.forEach(line => {
+    lines.forEach((line) => {
         const lineTrim = line.trim();
-        if (lineTrim.length && lineTrim.startsWith('--')) {
+        if (lineTrim.length && lineTrim.startsWith("--")) {
             const [cssVar, val] = lineTrim.split(":");
-            cssVars.push({ cssVar, val });
+            if (val && !cssVars.has(cssVar)) {
+                const kind = val.trim().startsWith("#") || val.trim().startsWith("rgba") || val.trim().startsWith("rgb") ? 15 : undefined;
+                const hint = new vscode.CompletionItem(cssVar, kind);
+                hint.detail = val;
+                cssVarsItems.push(hint);
+                cssVars.set(cssVar, val);
+            }
         }
     });
-    return;
+    const auto = vscode.languages.registerCompletionItemProvider(["css", "scss"], {
+        provideCompletionItems(document, position, token) {
+            return cssVarsItems;
+        },
+    });
+    contextCopy.subscriptions.push(auto);
+    return true;
 }
 function activate(context) {
+    contextCopy = context;
     const run = () => __awaiter(this, void 0, void 0, function* () {
-        const data = yield getAllVariable(vscode.workspace.rootPath);
-        const cssVarsItems = data.map((item) => new vscode.CompletionItem(item.cssVar));
-        const auto = vscode.languages.registerCompletionItemProvider(['css', 'scss'], {
-            provideCompletionItems(document, position, token) {
-                return cssVarsItems;
-            }
-        });
-        context.subscriptions.push(auto);
+        if (vscode.workspace.rootPath) {
+            const doneScan = yield getAllVariable(vscode.workspace.rootPath);
+        }
     });
     run();
 }

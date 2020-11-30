@@ -2,7 +2,7 @@
 	"name": "css-var-hint",
 	"displayName": "css var hint",
 	"description": "css var hint",
-	"version": "0.1.0",
+	"version": "0.2.2",
 	"publisher": "yanai101",
 	"repository": "https://github.com/yanai101/css-var-hint",
 	"engines": {
@@ -43,7 +43,7 @@
 		"glob": "^7.1.6",
 		"mocha": "^8.1.3",
 		"typescript": "^4.0.2",
-		"vscode-test": "^1.4.0"
+		"vscode-test": "^1.4.1"
 	},
 	"dependencies": {
 		"css-tree": "^1.0.0-alpha.39"
