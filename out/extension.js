@@ -44,7 +44,10 @@ function updateCssVarFromChunk(chunk) {
         if (lineTrim.length && lineTrim.startsWith("--")) {
             const [cssVar, val] = lineTrim.split(":");
             if (val && !cssVars.has(cssVar)) {
-                cssVarsItems.push(new vscode.CompletionItem(cssVar));
+                const kind = val.trim().startsWith("#") || val.trim().startsWith("rgba") || val.trim().startsWith("rgb") ? 15 : undefined;
+                const hint = new vscode.CompletionItem(cssVar, kind);
+                hint.detail = val;
+                cssVarsItems.push(hint);
                 cssVars.set(cssVar, val);
             }
         }
