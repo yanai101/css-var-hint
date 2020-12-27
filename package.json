@@ -2,7 +2,7 @@
 	"name": "css-var-hint",
 	"displayName": "css var hint",
 	"description": "css var hint",
-	"version": "0.2.3",
+	"version": "0.2.4",
 	"publisher": "yanai101",
 	"repository": "https://github.com/yanai101/css-var-hint",
 	"engines": {
