@@ -12,15 +12,15 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onCommand:css-var-hint.helloWorld",
+		"onCommand:css-var-hint.refresh",
 		"*"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
 		"commands": [
 			{
-				"command": "css-var-hint.helloWorld",
-				"title": "Hello World"
+				"command": "css-var-hint.refresh",
+				"title": "varHint: Update css var hint"
 			}
 		]
 	},

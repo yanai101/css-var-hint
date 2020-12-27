@@ -3,11 +3,13 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
+import * as url from "url";
 
 const directoriesToIgnore = ["bower_components", "node_modules", "www", "platforms", "dist", ".git", ".idea", "build", "server"];
 
 const cssVars = new Map();
 let contextCopy: any;
+let updateCommand = false;
 
 async function getAllVariable(urlPath: string): Promise<any> {
   let reader: any = null;
@@ -19,15 +21,16 @@ async function getAllVariable(urlPath: string): Promise<any> {
       getAllVariable(path.join(pathDir, item.name));
     }
     if (item.name.includes("css") || item.name.includes("scss")) {
-      reader = fs.createReadStream(path.join(pathDir, item.name));
+      const filePath = path.join(pathDir, item.name);
+      reader = fs.createReadStream(filePath);
       reader.on("data", (chunk: string) => {
-        updateCssVarFromChunk(chunk.toString());
+        updateCssVarFromChunk(chunk.toString(), filePath, item.name);
       });
     }
   });
 }
 
-function updateCssVarFromChunk(chunk: string) {
+function updateCssVarFromChunk(chunk: string, filePath:string, fileName:string) {
   const cssVarsItems: vscode.CompletionItem[] = [];
   const lines = chunk.split(/\r?\n/);
   lines.forEach((line) => {
@@ -37,7 +40,8 @@ function updateCssVarFromChunk(chunk: string) {
       if (val && !cssVars.has(cssVar)) {
         const kind = val.trim().startsWith("#") || val.trim().startsWith("rgba") || val.trim().startsWith("rgb") ? 15 : undefined;
         const hint = new vscode.CompletionItem(cssVar, kind);
-        hint.detail = val;
+        hint.detail = `${val}`;
+        hint.documentation = new vscode.MarkdownString(`[${fileName}](${url.pathToFileURL(filePath)})`);
         cssVarsItems.push(hint);
         cssVars.set(cssVar, val);
       }
@@ -48,7 +52,13 @@ function updateCssVarFromChunk(chunk: string) {
       return cssVarsItems;
     },
   });
+
+ 
   contextCopy.subscriptions.push(auto);
+  if(cssVars.size > 0 && updateCommand ){
+    vscode.window.showInformationMessage(`Update ${cssVars.size} CSS variables`);
+    updateCommand = false;
+  }
   return true;
 }
 
@@ -60,6 +70,12 @@ export function activate(context: vscode.ExtensionContext) {
       const doneScan = await getAllVariable(vscode.workspace.rootPath as string);
     }
   };
+
+  const dispatch = vscode.commands.registerCommand('css-var-hint.refresh', ()=>{
+    updateCommand = true;
+    run();
+  })
+  contextCopy.subscriptions.push(dispatch);
 
   run();
 }
