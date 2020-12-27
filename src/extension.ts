@@ -20,7 +20,7 @@ async function getAllVariable(urlPath: string): Promise<any> {
     if (item.isDirectory() && !directoriesToIgnore.includes(item.name)) {
       getAllVariable(path.join(pathDir, item.name));
     }
-    if (item.name.includes("css") || item.name.includes("scss")) {
+    if (item.name.includes("css") || item.name.includes("scss") || item.name.includes("less") ) {
       const filePath = path.join(pathDir, item.name);
       reader = fs.createReadStream(filePath);
       reader.on("data", (chunk: string) => {
