@@ -4,6 +4,7 @@
 	"description": "css var hint",
 	"version": "0.2.7",
 	"publisher": "yanai101",
+	"icon": "./media/icon.jpg",
 	"repository": "https://github.com/yanai101/css-var-hint",
 	"engines": {
 		"vscode": "^1.49.0"
