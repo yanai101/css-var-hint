@@ -5,6 +5,7 @@
 	"version": "0.2.9",
 	"publisher": "yanai101",
 	"icon": "media/icon.jpg",
+	"license": "MIT",
 	"repository": "https://github.com/yanai101/css-var-hint",
 	"engines": {
 		"vscode": "^1.49.0"
