@@ -11,4 +11,4 @@ that missing in styles file (scss, less ...)
 - Add option to view all the css variable in workspaces
 - improve search engine
 
-![vars panel](./media/panel.gig)
+![vars panel](./media/panel.gif)
