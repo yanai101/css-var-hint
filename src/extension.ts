@@ -4,6 +4,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import * as url from "url";
+import { CssVarHintPanel } from "./var-hint-panel";
 
 const directoriesToIgnore = ["bower_components", "node_modules", "www", "platforms", "dist", ".git", ".idea", "build", "server"];
 
@@ -20,7 +21,7 @@ async function getAllVariable(urlPath: string): Promise<any> {
     if (item.isDirectory() && !directoriesToIgnore.includes(item.name)) {
       getAllVariable(path.join(pathDir, item.name));
     }
-    if (item.name.includes("css") || item.name.includes("scss") || item.name.includes("less") ) {
+    if (item.name.includes("css") || item.name.includes("scss") || item.name.includes("less")) {
       const filePath = path.join(pathDir, item.name);
       reader = fs.createReadStream(filePath);
       reader.on("data", (chunk: string) => {
@@ -30,7 +31,7 @@ async function getAllVariable(urlPath: string): Promise<any> {
   });
 }
 
-function updateCssVarFromChunk(chunk: string, filePath:string, fileName:string) {
+function updateCssVarFromChunk(chunk: string, filePath: string, fileName: string) {
   const cssVarsItems: vscode.CompletionItem[] = [];
   const lines = chunk.split(/\r?\n/);
   lines.forEach((line) => {
@@ -38,12 +39,15 @@ function updateCssVarFromChunk(chunk: string, filePath:string, fileName:string) 
     if (lineTrim.length && lineTrim.startsWith("--")) {
       const [cssVar, val] = lineTrim.split(":");
       if (val && !cssVars.has(cssVar)) {
-        const kind = val.trim().startsWith("#") || val.trim().startsWith("rgba") || val.trim().startsWith("rgb") ? 15 : undefined;
+        const kind =
+          val.trim().startsWith("#") || val.trim().startsWith("rgba") || val.trim().startsWith("hsl") || val.trim().startsWith("hsla") || val.trim().startsWith("rgb")
+            ? 15
+            : undefined;
         const hint = new vscode.CompletionItem(cssVar, kind);
         hint.detail = `${val}`;
         hint.documentation = new vscode.MarkdownString(`[${fileName}](${url.pathToFileURL(filePath)})`);
         cssVarsItems.push(hint);
-        cssVars.set(cssVar, val);
+        cssVars.set(cssVar, { val, file: url.pathToFileURL(filePath) });
       }
     }
   });
@@ -53,9 +57,8 @@ function updateCssVarFromChunk(chunk: string, filePath:string, fileName:string) 
     },
   });
 
- 
   contextCopy.subscriptions.push(auto);
-  if(cssVars.size > 0 && updateCommand ){
+  if (cssVars.size > 0 && updateCommand) {
     vscode.window.showInformationMessage(`Update ${cssVars.size} CSS variables`);
     updateCommand = false;
   }
@@ -66,15 +69,31 @@ export function activate(context: vscode.ExtensionContext) {
   contextCopy = context;
 
   const run = async () => {
-    if (vscode.workspace.rootPath) {
-      const doneScan = await getAllVariable(vscode.workspace.rootPath as string);
+    if (vscode.workspace.workspaceFolders?.length) {
+      vscode.workspace.workspaceFolders.forEach(async (workspace) => {
+        await getAllVariable(workspace.uri.path);
+      });
     }
   };
 
-  const dispatch = vscode.commands.registerCommand('css-var-hint.refresh', ()=>{
+  const dispatch = vscode.commands.registerCommand("css-var-hint.refresh", () => {
     updateCommand = true;
     run();
-  })
+  });
+
+  contextCopy.subscriptions.push(
+    vscode.commands.registerCommand("varHint.showPanel", () => {
+      CssVarHintPanel.createOrShow(context.extensionUri, cssVars);
+    })
+  );
+
+  contextCopy.subscriptions.push(
+    vscode.commands.registerCommand("varHint.updatePanel", async () => {
+      await run();
+      CssVarHintPanel.createOrShow(context.extensionUri, cssVars);
+    })
+  );
+
   contextCopy.subscriptions.push(dispatch);
 
   run();

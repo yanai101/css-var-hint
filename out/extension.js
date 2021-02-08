@@ -16,6 +16,7 @@ const vscode = require("vscode");
 const fs = require("fs");
 const path = require("path");
 const url = require("url");
+const var_hint_panel_1 = require("./var-hint-panel");
 const directoriesToIgnore = ["bower_components", "node_modules", "www", "platforms", "dist", ".git", ".idea", "build", "server"];
 const cssVars = new Map();
 let contextCopy;
@@ -47,12 +48,14 @@ function updateCssVarFromChunk(chunk, filePath, fileName) {
         if (lineTrim.length && lineTrim.startsWith("--")) {
             const [cssVar, val] = lineTrim.split(":");
             if (val && !cssVars.has(cssVar)) {
-                const kind = val.trim().startsWith("#") || val.trim().startsWith("rgba") || val.trim().startsWith("rgb") ? 15 : undefined;
+                const kind = val.trim().startsWith("#") || val.trim().startsWith("rgba") || val.trim().startsWith("hsl") || val.trim().startsWith("hsla") || val.trim().startsWith("rgb")
+                    ? 15
+                    : undefined;
                 const hint = new vscode.CompletionItem(cssVar, kind);
                 hint.detail = `${val}`;
                 hint.documentation = new vscode.MarkdownString(`[${fileName}](${url.pathToFileURL(filePath)})`);
                 cssVarsItems.push(hint);
-                cssVars.set(cssVar, val);
+                cssVars.set(cssVar, { val, file: url.pathToFileURL(filePath) });
             }
         }
     });
@@ -71,14 +74,24 @@ function updateCssVarFromChunk(chunk, filePath, fileName) {
 function activate(context) {
     contextCopy = context;
     const run = () => __awaiter(this, void 0, void 0, function* () {
-        if (vscode.workspace.rootPath) {
-            const doneScan = yield getAllVariable(vscode.workspace.rootPath);
+        var _a;
+        if ((_a = vscode.workspace.workspaceFolders) === null || _a === void 0 ? void 0 : _a.length) {
+            vscode.workspace.workspaceFolders.forEach((workspace) => __awaiter(this, void 0, void 0, function* () {
+                yield getAllVariable(workspace.uri.path);
+            }));
         }
     });
-    const dispatch = vscode.commands.registerCommand('css-var-hint.refresh', () => {
+    const dispatch = vscode.commands.registerCommand("css-var-hint.refresh", () => {
         updateCommand = true;
         run();
     });
+    contextCopy.subscriptions.push(vscode.commands.registerCommand("varHint.showPanel", () => {
+        var_hint_panel_1.CssVarHintPanel.createOrShow(context.extensionUri, cssVars);
+    }));
+    contextCopy.subscriptions.push(vscode.commands.registerCommand("varHint.updatePanel", () => __awaiter(this, void 0, void 0, function* () {
+        yield run();
+        var_hint_panel_1.CssVarHintPanel.createOrShow(context.extensionUri, cssVars);
+    })));
     contextCopy.subscriptions.push(dispatch);
     run();
 }
