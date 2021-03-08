@@ -10,5 +10,6 @@ that missing in styles file (scss, less ...)
 
 - Add option to view all the css variable in workspaces
 - improve search engine
+- add support for on the fly variable saved
 
 ![vars panel](./media/panel.gif)
