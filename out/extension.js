@@ -21,6 +21,7 @@ const directoriesToIgnore = ["bower_components", "node_modules", "www", "platfor
 const cssVars = new Map();
 let contextCopy;
 let updateCommand = false;
+const isCssFile = (fileName) => fileName.includes("css") || fileName.includes("scss") || fileName.includes("less");
 function getAllVariable(urlPath) {
     return __awaiter(this, void 0, void 0, function* () {
         let reader = null;
@@ -30,7 +31,7 @@ function getAllVariable(urlPath) {
             if (item.isDirectory() && !directoriesToIgnore.includes(item.name)) {
                 getAllVariable(path.join(pathDir, item.name));
             }
-            if (item.name.includes("css") || item.name.includes("scss") || item.name.includes("less")) {
+            if (isCssFile(item.name)) {
                 const filePath = path.join(pathDir, item.name);
                 reader = fs.createReadStream(filePath);
                 reader.on("data", (chunk) => {
@@ -94,6 +95,14 @@ function activate(context) {
     })));
     contextCopy.subscriptions.push(dispatch);
     run();
+    vscode.workspace.onDidSaveTextDocument((e) => __awaiter(this, void 0, void 0, function* () {
+        if (isCssFile(e.fileName)) {
+            const text = e.getText();
+            const filePath = e.uri.path;
+            const fileName = path.basename(e.fileName);
+            yield updateCssVarFromChunk(text, filePath, fileName);
+        }
+    }));
 }
 exports.activate = activate;
 // this method is called when your extension is deactivated

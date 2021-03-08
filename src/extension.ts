@@ -12,6 +12,8 @@ const cssVars = new Map();
 let contextCopy: any;
 let updateCommand = false;
 
+const isCssFile = (fileName: string) => fileName.includes("css") || fileName.includes("scss") || fileName.includes("less");
+
 async function getAllVariable(urlPath: string): Promise<any> {
   let reader: any = null;
   const pathDir = path.join(urlPath);
@@ -21,7 +23,7 @@ async function getAllVariable(urlPath: string): Promise<any> {
     if (item.isDirectory() && !directoriesToIgnore.includes(item.name)) {
       getAllVariable(path.join(pathDir, item.name));
     }
-    if (item.name.includes("css") || item.name.includes("scss") || item.name.includes("less")) {
+    if (isCssFile(item.name)) {
       const filePath = path.join(pathDir, item.name);
       reader = fs.createReadStream(filePath);
       reader.on("data", (chunk: string) => {
@@ -97,6 +99,14 @@ export function activate(context: vscode.ExtensionContext) {
   contextCopy.subscriptions.push(dispatch);
 
   run();
+  vscode.workspace.onDidSaveTextDocument(async (e: vscode.TextDocument) => {
+    if (isCssFile(e.fileName)) {
+      const text = e.getText();
+      const filePath = e.uri.path;
+      const fileName = path.basename(e.fileName);
+      await updateCssVarFromChunk(text, filePath, fileName);
+    }
+  });
 }
 
 // this method is called when your extension is deactivated
