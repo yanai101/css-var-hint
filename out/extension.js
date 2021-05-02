@@ -15,7 +15,6 @@ exports.deactivate = exports.activate = void 0;
 const vscode = require("vscode");
 const fs = require("fs");
 const path = require("path");
-const url = require("url");
 const var_hint_panel_1 = require("./var-hint-panel");
 const directoriesToIgnore = ["bower_components", "node_modules", "www", "platforms", "dist", ".git", ".idea", "build", "server"];
 const cssVars = new Map();
@@ -54,9 +53,9 @@ function updateCssVarFromChunk(chunk, filePath, fileName) {
                     : undefined;
                 const hint = new vscode.CompletionItem(cssVar, kind);
                 hint.detail = `${val}`;
-                hint.documentation = new vscode.MarkdownString(`[${fileName}](${url.pathToFileURL(filePath)})`);
+                hint.documentation = new vscode.MarkdownString(`[${fileName}](${vscode.Uri.file(filePath)})`);
                 cssVarsItems.push(hint);
-                cssVars.set(cssVar, { val, file: url.pathToFileURL(filePath) });
+                cssVars.set(cssVar, { val, file: vscode.Uri.file(filePath) });
             }
         }
     });

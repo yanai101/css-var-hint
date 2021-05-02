@@ -47,9 +47,9 @@ function updateCssVarFromChunk(chunk: string, filePath: string, fileName: string
             : undefined;
         const hint = new vscode.CompletionItem(cssVar, kind);
         hint.detail = `${val}`;
-        hint.documentation = new vscode.MarkdownString(`[${fileName}](${url.pathToFileURL(filePath)})`);
+        hint.documentation = new vscode.MarkdownString(`[${fileName}](${vscode.Uri.file(filePath)})`);
         cssVarsItems.push(hint);
-        cssVars.set(cssVar, { val, file: url.pathToFileURL(filePath) });
+        cssVars.set(cssVar, { val, file: vscode.Uri.file(filePath) });
       }
     }
   });
