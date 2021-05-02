@@ -3,7 +3,6 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import * as url from "url";
 import { CssVarHintPanel } from "./var-hint-panel";
 
 const directoriesToIgnore = ["bower_components", "node_modules", "www", "platforms", "dist", ".git", ".idea", "build", "server"];
