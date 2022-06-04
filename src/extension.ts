@@ -52,7 +52,7 @@ function updateCssVarFromChunk(chunk: string, filePath: string, fileName: string
       }
     }
   });
-  const auto = vscode.languages.registerCompletionItemProvider(["css", "scss"], {
+  const auto = vscode.languages.registerCompletionItemProvider(["css", "scss", "postcss"], {
     provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
       return cssVarsItems;
     },
