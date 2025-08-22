@@ -97,6 +97,31 @@ export function activate(context: vscode.ExtensionContext) {
 
   contextCopy.subscriptions.push(dispatch);
 
+  const hover = vscode.languages.registerHoverProvider(["css", "scss", "less", "postcss"], {
+    provideHover(document, position) {
+      const range = document.getWordRangeAtPosition(position, /--[\w-]+/);
+      if (!range) {
+        return;
+      }
+      const name = document.getText(range);
+      const data: any = cssVars.get(name);
+      if (!data) {
+        return;
+      }
+      const value = data.val.trim().replace(/;$/, "");
+      const md = new vscode.MarkdownString();
+      md.appendMarkdown(`**${name}**: ${value}`);
+      if (/^#([0-9a-fA-F]{3,8})$/.test(value) || /^rgba?\(/.test(value) || /^hsla?\(/.test(value)) {
+        const color = encodeURIComponent(value);
+        md.appendMarkdown(
+          `\n\n![color](data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12'><rect width='12' height='12' fill='${color}' stroke='black'/></svg>)`
+        );
+      }
+      return new vscode.Hover(md);
+    },
+  });
+  contextCopy.subscriptions.push(hover);
+
   run();
   vscode.workspace.onDidSaveTextDocument(async (e: vscode.TextDocument) => {
     if (isCssFile(e.fileName)) {

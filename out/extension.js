@@ -59,7 +59,7 @@ function updateCssVarFromChunk(chunk, filePath, fileName) {
             }
         }
     });
-    const auto = vscode.languages.registerCompletionItemProvider(["css", "scss"], {
+    const auto = vscode.languages.registerCompletionItemProvider(["css", "scss", "postcss"], {
         provideCompletionItems(document, position, token) {
             return cssVarsItems;
         },
@@ -93,6 +93,28 @@ function activate(context) {
         var_hint_panel_1.CssVarHintPanel.createOrShow(context.extensionUri, cssVars);
     })));
     contextCopy.subscriptions.push(dispatch);
+    const hover = vscode.languages.registerHoverProvider(["css", "scss", "less", "postcss"], {
+        provideHover(document, position) {
+            const range = document.getWordRangeAtPosition(position, /--[\w-]+/);
+            if (!range) {
+                return;
+            }
+            const name = document.getText(range);
+            const data = cssVars.get(name);
+            if (!data) {
+                return;
+            }
+            const value = data.val.trim().replace(/;$/, "");
+            const md = new vscode.MarkdownString();
+            md.appendMarkdown(`**${name}**: ${value}`);
+            if (/^#([0-9a-fA-F]{3,8})$/.test(value) || /^rgba?\(/.test(value) || /^hsla?\(/.test(value)) {
+                const color = encodeURIComponent(value);
+                md.appendMarkdown(`\n\n![color](data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12'><rect width='12' height='12' fill='${color}' stroke='black'/></svg>)`);
+            }
+            return new vscode.Hover(md);
+        },
+    });
+    contextCopy.subscriptions.push(hover);
     run();
     vscode.workspace.onDidSaveTextDocument((e) => __awaiter(this, void 0, void 0, function* () {
         if (isCssFile(e.fileName)) {
