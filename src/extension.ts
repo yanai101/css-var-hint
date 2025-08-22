@@ -7,27 +7,30 @@ import { CssVarHintPanel } from "./var-hint-panel";
 
 const directoriesToIgnore = ["bower_components", "node_modules", "www", "platforms", "dist", ".git", ".idea", "build", "server"];
 
-const cssVars = new Map();
+interface CssVarInfo {
+  val: string;
+  file: vscode.Uri;
+  line: number;
+}
+
+const cssVars = new Map<string, CssVarInfo>();
 let contextCopy: any;
 let updateCommand = false;
 
 const isCssFile = (fileName: string) => fileName.includes("css") || fileName.includes("scss") || fileName.includes("less");
 
 async function getAllVariable(urlPath: string): Promise<any> {
-  let reader: any = null;
   const pathDir = path.join(urlPath);
   const currentDirectory = fs.readdirSync(pathDir, { withFileTypes: true });
 
-  currentDirectory.forEach(async (item) => {
+  currentDirectory.forEach((item) => {
     if (item.isDirectory() && !directoriesToIgnore.includes(item.name)) {
       getAllVariable(path.join(pathDir, item.name));
     }
     if (isCssFile(item.name)) {
       const filePath = path.join(pathDir, item.name);
-      reader = fs.createReadStream(filePath);
-      reader.on("data", (chunk: string) => {
-        updateCssVarFromChunk(chunk.toString(), filePath, item.name);
-      });
+      const content = fs.readFileSync(filePath, "utf8");
+      updateCssVarFromChunk(content, filePath, item.name);
     }
   });
 }
@@ -35,11 +38,11 @@ async function getAllVariable(urlPath: string): Promise<any> {
 function updateCssVarFromChunk(chunk: string, filePath: string, fileName: string) {
   const cssVarsItems: vscode.CompletionItem[] = [];
   const lines = chunk.split(/\r?\n/);
-  lines.forEach((line) => {
+  lines.forEach((line, index) => {
     const lineTrim = line.trim();
     if (lineTrim.length && lineTrim.startsWith("--")) {
       const [cssVar, val] = lineTrim.split(":");
-      if (val && !cssVars.has(cssVar)) {
+      if (val) {
         const kind =
           val.trim().startsWith("#") || val.trim().startsWith("rgba") || val.trim().startsWith("hsl") || val.trim().startsWith("hsla") || val.trim().startsWith("rgb")
             ? 15
@@ -48,7 +51,7 @@ function updateCssVarFromChunk(chunk: string, filePath: string, fileName: string
         hint.detail = `${val}`;
         hint.documentation = new vscode.MarkdownString(`[${fileName}](${vscode.Uri.file(filePath)})`);
         cssVarsItems.push(hint);
-        cssVars.set(cssVar, { val, file: vscode.Uri.file(filePath) });
+        cssVars.set(cssVar, { val, file: vscode.Uri.file(filePath), line: index });
       }
     }
   });
@@ -104,13 +107,15 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
       const name = document.getText(range);
-      const data: any = cssVars.get(name);
+      const data = cssVars.get(name);
       if (!data) {
         return;
       }
       const value = data.val.trim().replace(/;$/, "");
       const md = new vscode.MarkdownString();
-      md.appendMarkdown(`**${name}**: ${value}`);
+      md.isTrusted = true;
+      const link = data.file.with({ fragment: `L${data.line + 1}` });
+      md.appendMarkdown(`[${name}](${link.toString()}): ${value}`);
       if (/^#([0-9a-fA-F]{3,8})$/.test(value) || /^rgba?\(/.test(value) || /^hsla?\(/.test(value)) {
         const color = encodeURIComponent(value);
         md.appendMarkdown(
@@ -121,6 +126,22 @@ export function activate(context: vscode.ExtensionContext) {
     },
   });
   contextCopy.subscriptions.push(hover);
+
+  const definition = vscode.languages.registerDefinitionProvider(["css", "scss", "less", "postcss"], {
+    provideDefinition(document, position) {
+      const range = document.getWordRangeAtPosition(position, /--[\w-]+/);
+      if (!range) {
+        return;
+      }
+      const name = document.getText(range);
+      const data = cssVars.get(name);
+      if (!data) {
+        return;
+      }
+      return new vscode.Location(data.file, new vscode.Position(data.line, 0));
+    },
+  });
+  contextCopy.subscriptions.push(definition);
 
   run();
   vscode.workspace.onDidSaveTextDocument(async (e: vscode.TextDocument) => {

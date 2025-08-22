@@ -8,3 +8,4 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 - Initial release
 - Show CSS variable value on hover with color preview
+- Make hover color preview work and link CSS variables to their definitions
