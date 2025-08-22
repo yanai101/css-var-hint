@@ -117,10 +117,9 @@ export function activate(context: vscode.ExtensionContext) {
       const link = data.file.with({ fragment: `L${data.line + 1}` });
       md.appendMarkdown(`[${name}](${link.toString()}): ${value}`);
       if (/^#([0-9a-fA-F]{3,8})$/.test(value) || /^rgba?\(/.test(value) || /^hsla?\(/.test(value)) {
-        const color = encodeURIComponent(value);
-        md.appendMarkdown(
-          `\n\n![color](data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12'><rect width='12' height='12' fill='${color}' stroke='black'/></svg>)`
-        );
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><rect width="12" height="12" fill="${value}" stroke="black"/></svg>`;
+        const dataUrl = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+        md.appendMarkdown(`\n\n![color](${dataUrl})`);
       }
       return new vscode.Hover(md);
     },
