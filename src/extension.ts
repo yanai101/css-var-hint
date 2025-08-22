@@ -17,13 +17,14 @@ const cssVars = new Map<string, CssVarInfo>();
 let contextCopy: any;
 let updateCommand = false;
 
-const isCssFile = (fileName: string) => fileName.includes("css") || fileName.includes("scss") || fileName.includes("less");
+const cssExtensions = new Set([".css", ".scss", ".sass", ".less", ".pcss", ".postcss", ".sss"]);
+const isCssFile = (fileName: string) => cssExtensions.has(path.extname(fileName));
 
-async function getAllVariable(urlPath: string): Promise<any> {
+function getAllVariable(urlPath: string): void {
   const pathDir = path.join(urlPath);
   const currentDirectory = fs.readdirSync(pathDir, { withFileTypes: true });
 
-  currentDirectory.forEach((item) => {
+  for (const item of currentDirectory) {
     if (item.isDirectory() && !directoriesToIgnore.includes(item.name)) {
       getAllVariable(path.join(pathDir, item.name));
     }
@@ -32,7 +33,7 @@ async function getAllVariable(urlPath: string): Promise<any> {
       const content = fs.readFileSync(filePath, "utf8");
       updateCssVarFromChunk(content, filePath, item.name);
     }
-  });
+  }
 }
 
 function updateCssVarFromChunk(chunk: string, filePath: string, fileName: string) {
@@ -55,7 +56,7 @@ function updateCssVarFromChunk(chunk: string, filePath: string, fileName: string
       }
     }
   });
-  const auto = vscode.languages.registerCompletionItemProvider(["css", "scss", "postcss"], {
+  const auto = vscode.languages.registerCompletionItemProvider(["css", "scss", "sass", "less", "postcss"], {
     provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
       return cssVarsItems;
     },
@@ -72,11 +73,11 @@ function updateCssVarFromChunk(chunk: string, filePath: string, fileName: string
 export function activate(context: vscode.ExtensionContext) {
   contextCopy = context;
 
-  const run = async () => {
+  const run = () => {
     if (vscode.workspace.workspaceFolders?.length) {
-      vscode.workspace.workspaceFolders.forEach(async (workspace) => {
-        await getAllVariable(workspace.uri.path);
-      });
+      for (const workspace of vscode.workspace.workspaceFolders) {
+        getAllVariable(workspace.uri.fsPath);
+      }
     }
   };
 
@@ -92,8 +93,8 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   contextCopy.subscriptions.push(
-    vscode.commands.registerCommand("varHint.updatePanel", async () => {
-      await run();
+    vscode.commands.registerCommand("varHint.updatePanel", () => {
+      run();
       CssVarHintPanel.createOrShow(context.extensionUri, cssVars);
     })
   );
@@ -115,8 +116,9 @@ export function activate(context: vscode.ExtensionContext) {
       const md = new vscode.MarkdownString();
       md.isTrusted = true;
       const link = data.file.with({ fragment: `L${data.line + 1}` });
-      md.appendMarkdown(`[${name}](${link.toString()}): ${value}`);
-      if (/^#([0-9a-fA-F]{3,8})$/.test(value) || /^rgba?\(/.test(value) || /^hsla?\(/.test(value)) {
+      md.appendMarkdown(`[${name}](${link.toString()})`);
+      md.appendText(`: ${value}`);
+      if (/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value) || /^rgba?\(/.test(value) || /^hsla?\(/.test(value)) {
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><rect width="12" height="12" fill="${value}" stroke="black"/></svg>`;
         const dataUrl = `data:image/svg+xml,${encodeURIComponent(svg)}`;
         md.appendMarkdown(`\n\n![color](${dataUrl})`);
@@ -143,12 +145,12 @@ export function activate(context: vscode.ExtensionContext) {
   contextCopy.subscriptions.push(definition);
 
   run();
-  vscode.workspace.onDidSaveTextDocument(async (e: vscode.TextDocument) => {
+  vscode.workspace.onDidSaveTextDocument((e: vscode.TextDocument) => {
     if (isCssFile(e.fileName)) {
       const text = e.getText();
-      const filePath = e.uri.path;
+      const filePath = e.uri.fsPath;
       const fileName = path.basename(e.fileName);
-      await updateCssVarFromChunk(text, filePath, fileName);
+      updateCssVarFromChunk(text, filePath, fileName);
     }
   });
 }

@@ -1,13 +1,4 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deactivate = exports.activate = void 0;
 // The module 'vscode' contains the VS Code extensibility API
@@ -20,22 +11,21 @@ const directoriesToIgnore = ["bower_components", "node_modules", "www", "platfor
 const cssVars = new Map();
 let contextCopy;
 let updateCommand = false;
-const isCssFile = (fileName) => fileName.includes("css") || fileName.includes("scss") || fileName.includes("less");
+const cssExtensions = new Set([".css", ".scss", ".sass", ".less", ".pcss", ".postcss", ".sss"]);
+const isCssFile = (fileName) => cssExtensions.has(path.extname(fileName));
 function getAllVariable(urlPath) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const pathDir = path.join(urlPath);
-        const currentDirectory = fs.readdirSync(pathDir, { withFileTypes: true });
-        currentDirectory.forEach((item) => {
-            if (item.isDirectory() && !directoriesToIgnore.includes(item.name)) {
-                getAllVariable(path.join(pathDir, item.name));
-            }
-            if (isCssFile(item.name)) {
-                const filePath = path.join(pathDir, item.name);
-                const content = fs.readFileSync(filePath, "utf8");
-                updateCssVarFromChunk(content, filePath, item.name);
-            }
-        });
-    });
+    const pathDir = path.join(urlPath);
+    const currentDirectory = fs.readdirSync(pathDir, { withFileTypes: true });
+    for (const item of currentDirectory) {
+        if (item.isDirectory() && !directoriesToIgnore.includes(item.name)) {
+            getAllVariable(path.join(pathDir, item.name));
+        }
+        if (isCssFile(item.name)) {
+            const filePath = path.join(pathDir, item.name);
+            const content = fs.readFileSync(filePath, "utf8");
+            updateCssVarFromChunk(content, filePath, item.name);
+        }
+    }
 }
 function updateCssVarFromChunk(chunk, filePath, fileName) {
     const cssVarsItems = [];
@@ -56,7 +46,7 @@ function updateCssVarFromChunk(chunk, filePath, fileName) {
             }
         }
     });
-    const auto = vscode.languages.registerCompletionItemProvider(["css", "scss", "postcss"], {
+    const auto = vscode.languages.registerCompletionItemProvider(["css", "scss", "sass", "less", "postcss"], {
         provideCompletionItems(document, position, token) {
             return cssVarsItems;
         },
@@ -70,14 +60,14 @@ function updateCssVarFromChunk(chunk, filePath, fileName) {
 }
 function activate(context) {
     contextCopy = context;
-    const run = () => __awaiter(this, void 0, void 0, function* () {
+    const run = () => {
         var _a;
         if ((_a = vscode.workspace.workspaceFolders) === null || _a === void 0 ? void 0 : _a.length) {
-            vscode.workspace.workspaceFolders.forEach((workspace) => __awaiter(this, void 0, void 0, function* () {
-                yield getAllVariable(workspace.uri.path);
-            }));
+            for (const workspace of vscode.workspace.workspaceFolders) {
+                getAllVariable(workspace.uri.fsPath);
+            }
         }
-    });
+    };
     const dispatch = vscode.commands.registerCommand("css-var-hint.refresh", () => {
         updateCommand = true;
         run();
@@ -85,10 +75,10 @@ function activate(context) {
     contextCopy.subscriptions.push(vscode.commands.registerCommand("varHint.showPanel", () => {
         var_hint_panel_1.CssVarHintPanel.createOrShow(context.extensionUri, cssVars);
     }));
-    contextCopy.subscriptions.push(vscode.commands.registerCommand("varHint.updatePanel", () => __awaiter(this, void 0, void 0, function* () {
-        yield run();
+    contextCopy.subscriptions.push(vscode.commands.registerCommand("varHint.updatePanel", () => {
+        run();
         var_hint_panel_1.CssVarHintPanel.createOrShow(context.extensionUri, cssVars);
-    })));
+    }));
     contextCopy.subscriptions.push(dispatch);
     const hover = vscode.languages.registerHoverProvider(["css", "scss", "less", "postcss"], {
         provideHover(document, position) {
@@ -105,8 +95,9 @@ function activate(context) {
             const md = new vscode.MarkdownString();
             md.isTrusted = true;
             const link = data.file.with({ fragment: `L${data.line + 1}` });
-            md.appendMarkdown(`[${name}](${link.toString()}): ${value}`);
-            if (/^#([0-9a-fA-F]{3,8})$/.test(value) || /^rgba?\(/.test(value) || /^hsla?\(/.test(value)) {
+            md.appendMarkdown(`[${name}](${link.toString()})`);
+            md.appendText(`: ${value}`);
+            if (/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value) || /^rgba?\(/.test(value) || /^hsla?\(/.test(value)) {
                 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><rect width="12" height="12" fill="${value}" stroke="black"/></svg>`;
                 const dataUrl = `data:image/svg+xml,${encodeURIComponent(svg)}`;
                 md.appendMarkdown(`\n\n![color](${dataUrl})`);
@@ -131,14 +122,14 @@ function activate(context) {
     });
     contextCopy.subscriptions.push(definition);
     run();
-    vscode.workspace.onDidSaveTextDocument((e) => __awaiter(this, void 0, void 0, function* () {
+    vscode.workspace.onDidSaveTextDocument((e) => {
         if (isCssFile(e.fileName)) {
             const text = e.getText();
-            const filePath = e.uri.path;
+            const filePath = e.uri.fsPath;
             const fileName = path.basename(e.fileName);
-            yield updateCssVarFromChunk(text, filePath, fileName);
+            updateCssVarFromChunk(text, filePath, fileName);
         }
-    }));
+    });
 }
 exports.activate = activate;
 // this method is called when your extension is deactivated
