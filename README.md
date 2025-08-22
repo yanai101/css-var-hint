@@ -1,15 +1,16 @@
 # css-var-hint
 
-This simple extension adds more capability for css var hint -
-that missing in styles file (scss, less ...)
+This extension enhances CSS variable hints in style files (CSS, SCSS, LESS, etc.) with the following features:
 
-- Add ability to force scan css vars
-- Add link to source file in documentation
+- **Hover Preview:** Shows the value of a CSS variable on hover, including a color swatch if the value is a color.
+- **Source Linking:** Hover tooltips link directly to the variable's definition in the source file.
+- **Panel View:** View all CSS variables in your workspace in a dedicated panel.
+- **Improved Search:** Enhanced search engine for variable discovery.
+- **On-the-fly Updates:** Variables update automatically when files are saved.
+- **Force Scan:** Command to force a rescan of all CSS variables in the workspace.
 
 ![css var hint](./media/css-var-hint.gif)
 
-- Add option to view all the css variable in workspaces
-- improve search engine
-- add support for on the fly variable saved
+- **Performance Note:** Uses a wildcard activation event for immediate availability.
 
 ![vars panel](./media/panel.gif)
