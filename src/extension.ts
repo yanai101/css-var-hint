@@ -1,159 +1,262 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
-import * as fs from "fs";
 import * as path from "path";
 import { CssVarHintPanel } from "./var-hint-panel";
 
 const directoriesToIgnore = ["bower_components", "node_modules", "www", "platforms", "dist", ".git", ".idea", "build", "server"];
-
 interface CssVarInfo {
-  val: string;
+  value: string;
   file: vscode.Uri;
   line: number;
+  fileName: string;
 }
 
-const cssVars = new Map<string, CssVarInfo>();
-let contextCopy: any;
-let updateCommand = false;
+const cssVariables = new Map<string, CssVarInfo>();
+const fileToVariables = new Map<string, Set<string>>();
 
-const cssExtensions = new Set([".css", ".scss", ".sass", ".less", ".pcss", ".postcss", ".sss"]);
-const isCssFile = (fileName: string) => cssExtensions.has(path.extname(fileName));
+const cssFileExtensions = ["css", "scss", "sass", "less", "pcss", "postcss", "sss"];
+const cssLanguages = ["css", "scss", "sass", "less", "postcss"];
 
-function getAllVariable(urlPath: string): void {
-  const pathDir = path.join(urlPath);
-  const currentDirectory = fs.readdirSync(pathDir, { withFileTypes: true });
+const isCssFile = (fileName: string) => {
+  const extension = path.extname(fileName).toLowerCase().replace(/^\./, "");
+  return cssFileExtensions.includes(extension);
+};
 
-  for (const item of currentDirectory) {
-    if (item.isDirectory() && !directoriesToIgnore.includes(item.name)) {
-      getAllVariable(path.join(pathDir, item.name));
-    }
-    if (isCssFile(item.name)) {
-      const filePath = path.join(pathDir, item.name);
-      const content = fs.readFileSync(filePath, "utf8");
-      updateCssVarFromChunk(content, filePath, item.name);
-    }
+const colorValueRegex = /^#(?:[0-9a-f]{3,8})$|^rgba?\(|^hsla?\(/i;
+
+const includePattern = `**/*.{${cssFileExtensions.join(",")}}`;
+const excludePattern = `{${directoriesToIgnore.map((dir) => `**/${dir}/**`).join(",")}}`;
+
+function createMarkdownLink(name: string, info: CssVarInfo) {
+  const link = info.file.with({ fragment: `L${info.line + 1}` }).toString();
+  const markdown = new vscode.MarkdownString(`[${name}](${link})`);
+  markdown.isTrusted = true;
+  markdown.appendText(`: ${info.value}`);
+  if (colorValueRegex.test(info.value)) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><rect width="12" height="12" fill="${info.value}" stroke="black"/></svg>`;
+    const dataUrl = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+    markdown.appendMarkdown(`\n\n![color swatch](${dataUrl})`);
   }
+  return markdown;
 }
 
-function updateCssVarFromChunk(chunk: string, filePath: string, fileName: string) {
-  const cssVarsItems: vscode.CompletionItem[] = [];
-  const lines = chunk.split(/\r?\n/);
+function createCompletionItem(name: string, info: CssVarInfo) {
+  const kind = colorValueRegex.test(info.value) ? vscode.CompletionItemKind.Color : vscode.CompletionItemKind.Variable;
+  const item = new vscode.CompletionItem(name, kind);
+  item.detail = info.value;
+  const link = info.file.with({ fragment: `L${info.line + 1}` }).toString();
+  const markdown = new vscode.MarkdownString(`[${info.fileName}](${link})`);
+  markdown.isTrusted = true;
+  item.documentation = markdown;
+  return item;
+}
+
+function extractVariablesFromText(text: string, uri: vscode.Uri): Map<string, CssVarInfo> {
+  const variables = new Map<string, CssVarInfo>();
+  const lines = text.split(/\r?\n/);
+  const lineRegex = /--([\w-]+)\s*:\s*([^;]+);?/g;
+
   lines.forEach((line, index) => {
-    const lineTrim = line.trim();
-    if (lineTrim.length && lineTrim.startsWith("--")) {
-      const [cssVar, val] = lineTrim.split(":");
-      if (val) {
-        const kind =
-          val.trim().startsWith("#") || val.trim().startsWith("rgba") || val.trim().startsWith("hsl") || val.trim().startsWith("hsla") || val.trim().startsWith("rgb")
-            ? 15
-            : undefined;
-        const hint = new vscode.CompletionItem(cssVar, kind);
-        hint.detail = `${val}`;
-        hint.documentation = new vscode.MarkdownString(`[${fileName}](${vscode.Uri.file(filePath)})`);
-        cssVarsItems.push(hint);
-        cssVars.set(cssVar, { val, file: vscode.Uri.file(filePath), line: index });
+    let match: RegExpExecArray | null;
+    while ((match = lineRegex.exec(line))) {
+      const name = `--${match[1]}`;
+      const value = match[2].trim().replace(/\s*!important$/i, "");
+      if (!value) {
+        continue;
       }
+      variables.set(name, {
+        value,
+        file: uri,
+        line: index,
+        fileName: path.basename(uri.fsPath),
+      });
     }
+    lineRegex.lastIndex = 0;
   });
-  const auto = vscode.languages.registerCompletionItemProvider(["css", "scss", "sass", "less", "postcss"], {
-    provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken) {
-      return cssVarsItems;
+
+  return variables;
+}
+
+function removeVariablesForFile(uri: vscode.Uri) {
+  const key = uri.toString();
+  const variables = fileToVariables.get(key);
+  if (!variables) {
+    return;
+  }
+  for (const name of variables) {
+    cssVariables.delete(name);
+  }
+  fileToVariables.delete(key);
+  markPanelForRefresh();
+}
+
+function markPanelForRefresh() {
+  CssVarHintPanel._needRefresh = true;
+}
+
+function updateVariablesForFile(uri: vscode.Uri, text: string) {
+  removeVariablesForFile(uri);
+  const variables = extractVariablesFromText(text, uri);
+  const names = new Set<string>();
+  for (const [name, info] of variables) {
+    cssVariables.set(name, info);
+    names.add(name);
+  }
+  if (names.size) {
+    fileToVariables.set(uri.toString(), names);
+  }
+  markPanelForRefresh();
+}
+
+async function readFile(uri: vscode.Uri) {
+  const buffer = await vscode.workspace.fs.readFile(uri);
+  return Buffer.from(buffer).toString("utf8");
+}
+
+async function refreshWorkspace() {
+  cssVariables.clear();
+  fileToVariables.clear();
+  const files = await vscode.workspace.findFiles(includePattern, excludePattern);
+  await Promise.all(
+    files.map(async (file) => {
+      try {
+        const text = await readFile(file);
+        updateVariablesForFile(file, text);
+      } catch (error) {
+        console.error(`css-var-hint: failed to read ${file.fsPath}`, error);
+      }
+    })
+  );
+  markPanelForRefresh();
+  return cssVariables.size;
+}
+
+export async function activate(context: vscode.ExtensionContext) {
+  const completionProvider = vscode.languages.registerCompletionItemProvider(cssLanguages, {
+    provideCompletionItems() {
+      return Array.from(cssVariables.entries()).map(([name, info]) => createCompletionItem(name, info));
     },
   });
 
-  contextCopy.subscriptions.push(auto);
-  if (cssVars.size > 0 && updateCommand) {
-    vscode.window.showInformationMessage(`Update ${cssVars.size} CSS variables`);
-    updateCommand = false;
-  }
-  return true;
-}
+  context.subscriptions.push(completionProvider);
 
-export function activate(context: vscode.ExtensionContext) {
-  contextCopy = context;
-
-  const run = () => {
-    if (vscode.workspace.workspaceFolders?.length) {
-      for (const workspace of vscode.workspace.workspaceFolders) {
-        getAllVariable(workspace.uri.fsPath);
-      }
-    }
-  };
-
-  const dispatch = vscode.commands.registerCommand("css-var-hint.refresh", () => {
-    updateCommand = true;
-    run();
-  });
-
-  contextCopy.subscriptions.push(
-    vscode.commands.registerCommand("varHint.showPanel", () => {
-      CssVarHintPanel.createOrShow(context.extensionUri, cssVars);
-    })
-  );
-
-  contextCopy.subscriptions.push(
-    vscode.commands.registerCommand("varHint.updatePanel", () => {
-      run();
-      CssVarHintPanel.createOrShow(context.extensionUri, cssVars);
-    })
-  );
-
-  contextCopy.subscriptions.push(dispatch);
-
-  const hover = vscode.languages.registerHoverProvider(["css", "scss", "less", "postcss"], {
+  const hover = vscode.languages.registerHoverProvider(cssLanguages, {
     provideHover(document, position) {
       const range = document.getWordRangeAtPosition(position, /--[\w-]+/);
       if (!range) {
         return;
       }
       const name = document.getText(range);
-      const data = cssVars.get(name);
-      if (!data) {
+      const info = cssVariables.get(name);
+      if (!info) {
         return;
       }
-      const value = data.val.trim().replace(/;$/, "");
-      const md = new vscode.MarkdownString();
-      md.isTrusted = true;
-      const link = data.file.with({ fragment: `L${data.line + 1}` });
-      md.appendMarkdown(`[${name}](${link.toString()})`);
-      md.appendText(`: ${value}`);
-      if (/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value) || /^rgba?\(/.test(value) || /^hsla?\(/.test(value)) {
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><rect width="12" height="12" fill="${value}" stroke="black"/></svg>`;
-        const dataUrl = `data:image/svg+xml,${encodeURIComponent(svg)}`;
-        md.appendMarkdown(`\n\n![color](${dataUrl})`);
-      }
-      return new vscode.Hover(md);
+      return new vscode.Hover(createMarkdownLink(name, info));
     },
   });
-  contextCopy.subscriptions.push(hover);
 
-  const definition = vscode.languages.registerDefinitionProvider(["css", "scss", "less", "postcss"], {
+  context.subscriptions.push(hover);
+
+  const definition = vscode.languages.registerDefinitionProvider(cssLanguages, {
     provideDefinition(document, position) {
       const range = document.getWordRangeAtPosition(position, /--[\w-]+/);
       if (!range) {
         return;
       }
       const name = document.getText(range);
-      const data = cssVars.get(name);
-      if (!data) {
+      const info = cssVariables.get(name);
+      if (!info) {
         return;
       }
-      return new vscode.Location(data.file, new vscode.Position(data.line, 0));
+      return new vscode.Location(info.file, new vscode.Position(info.line, 0));
     },
   });
-  contextCopy.subscriptions.push(definition);
 
-  run();
-  vscode.workspace.onDidSaveTextDocument((e: vscode.TextDocument) => {
-    if (isCssFile(e.fileName)) {
-      const text = e.getText();
-      const filePath = e.uri.fsPath;
-      const fileName = path.basename(e.fileName);
-      updateCssVarFromChunk(text, filePath, fileName);
+  context.subscriptions.push(definition);
+
+  async function runFullRefresh(showMessage: boolean) {
+    const total = await refreshWorkspace();
+    if (showMessage) {
+      void vscode.window.showInformationMessage(`Indexed ${total} CSS variables`);
     }
-  });
+  }
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("css-var-hint.refresh", async () => {
+      await runFullRefresh(true);
+      CssVarHintPanel.createOrShow(context.extensionUri, cssVariables);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("varHint.showPanel", () => {
+      CssVarHintPanel.createOrShow(context.extensionUri, cssVariables);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("varHint.updatePanel", async () => {
+      await runFullRefresh(false);
+      CssVarHintPanel.createOrShow(context.extensionUri, cssVariables);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidSaveTextDocument((document) => {
+      if (!isCssFile(document.fileName)) {
+        return;
+      }
+      updateVariablesForFile(document.uri, document.getText());
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidCreateFiles(async (event) => {
+      await Promise.all(
+        event.files
+          .filter((file) => isCssFile(file.fsPath))
+          .map(async (file) => {
+            try {
+              const text = await readFile(file);
+              updateVariablesForFile(file, text);
+            } catch (error) {
+              console.error(`css-var-hint: failed to process created file ${file.fsPath}`, error);
+            }
+          })
+      );
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidRenameFiles(async (event) => {
+      await Promise.all(
+        event.files.map(async ({ oldUri, newUri }) => {
+          removeVariablesForFile(oldUri);
+          if (!isCssFile(newUri.fsPath)) {
+            return;
+          }
+          try {
+            const text = await readFile(newUri);
+            updateVariablesForFile(newUri, text);
+          } catch (error) {
+            console.error(`css-var-hint: failed to process renamed file ${newUri.fsPath}`, error);
+          }
+        })
+      );
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidDeleteFiles((event) => {
+      for (const file of event.files) {
+        removeVariablesForFile(file);
+      }
+    })
+  );
+
+  await runFullRefresh(false);
 }
 
-// this method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+  cssVariables.clear();
+  fileToVariables.clear();
+}
